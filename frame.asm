@@ -9,7 +9,7 @@ argv    db      ?
 org 100h
 
 LINE_LEN     = 80d
-CENTER_BYTE  = 2000d                    ; (12, 40)
+CENTER_BYTE  = 2000d                        ; (12, 40)
 
 start:  mov     di, offset argv
 
