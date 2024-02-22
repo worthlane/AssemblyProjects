@@ -20,6 +20,7 @@ SpawnFrame      proc
                 pop es
                 pop ds
 
+                call    SaveRegisters
                 call    GetConsoleParams
 
                 push    di                      ; SAVING CONSOLE POINTER
@@ -533,26 +534,47 @@ DrawLine    proc
 ; --------------------------------------------------
 
 SaveRegisters		proc
-                    push bp
-                    mov bp, sp
-
-					push di cx bx
-
-                    mov cx, 13d                     ; REGISTERS AMOUNT
-                    mov bx, bp                      ; FIRST PARAMETER INDEX
-                    add bx, 4d
+					push di
 
 					mov di, offset FrameParams
 					add di, START_PLACE
 
-RegisterLoop:       mov ax, ss:[bx]
-                    call OutputRegister
-                    add bx, 2d
-                    loop RegisterLoop
+					call OutputRegister
 
-					pop bx cx di
+					mov ax, bx
+					call OutputRegister
 
-                    pop bp
+					mov ax, cx
+					call OutputRegister
+
+					mov ax, dx
+					call OutputRegister
+
+					mov ax, si
+					call OutputRegister
+
+					mov ax, di
+					call OutputRegister
+
+					mov ax, bp
+					call OutputRegister
+
+					mov ax, sp
+					call OutputRegister
+
+					mov ax, ds
+					call OutputRegister
+
+					mov ax, es
+					call OutputRegister
+
+					mov ax, ss
+					call OutputRegister
+
+					mov ax, cs
+					call OutputRegister
+
+					pop di
 					ret
 					endp
 
@@ -637,6 +659,6 @@ FrameParams db '13 17 4e 1 registers:', \
                            'es     \', \
                            'ss     \', \
                            'cs     \', \
-                           'ip     $' \
+                           'ip     $', \
 
 
