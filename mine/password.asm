@@ -12,20 +12,20 @@ PASSWORD_HASH  = 12123d
 CIPHER_SHIFT   = 78d
 
 Start:      mov ah, 09h
-            mov dx, offset INTRO_MESSAGE
+            mov dx, offset INTRO_MESSAGE            ; INTRO MSG OUTPUT
             int 21h
 
             mov di, offset BUFFER
-            call GetPassword
+            call GetPassword                        ; GETS PASSWORD AND PLACES IT IN BUFFER
 
             mov si, offset CORRECT_PASS
             mov di, offset BUFFER
-            call CheckPassword
+            call CheckPassword                      ; COMPARES BUFFER WITH CORRECT PASSWORD
 
             cmp bx, TRUE
-            je Success
+            je Success                              ; SUCCESS PROMPT IF BUFFER IS CORRECT
 
-            mov di, offset FAILURE_FRAME
+            mov di, offset FAILURE_FRAME            ; FAILURE PROMPT IF BIFFER IS NOT CORRECT
             jmp OpenFrame
 
 Success:    mov di, offset SUCCESS_FRAME
@@ -52,15 +52,15 @@ InputLoop:      mov dl, 0ffh                            ; CONSOLE INPUT MODE
 
                 jz InputLoop
 
-                mov dl, al
+                mov dl, al                              ; PRINT SYMBOL IN CONSOLE (TO SEE INPUT IN CONSOLE)
                 int 21h
 
-                add al, CIPHER_SHIFT
+                add al, CIPHER_SHIFT                    ; SYMBOL IS ENCRYPTED
 
-                mov ds:[di], al
+                mov ds:[di], al                         ; MOVE SYMBOL IN BUFFER
                 inc di
 
-                cmp al, NEW_LINE_ASCII + CIPHER_SHIFT
+                cmp al, NEW_LINE_ASCII + CIPHER_SHIFT   ; STOP INPUT WHEN [ENTER]
                 jne InputLoop
 
                 ret
