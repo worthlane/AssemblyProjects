@@ -1,0 +1,977 @@
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 1
+int.asm
+
+
+
+      1				     .286
+      2	0000			     .model tiny
+      3	0000			     .code
+      4				     org 100h
+      5
+      6	      =0000		     FALSE = 0000h
+      7	      =FFFF		     TRUE  = not FALSE
+      8
+      9	      =B800		     VMEM     =	0b800h
+     10	      =0050		     LINE_LEN =	80d
+     11
+     12	      =0014		     FRAME_WIDTH = 20d
+     13	      =0028		     FRAME_LEN	 = 40d
+     14	      =004E		     FRAME_COLOR = 4eh
+     15
+     16	0100  E8 005B		     Start:	 call Init09
+     17	0103  E8 007B				 call Init08
+     18
+     19	0106  B8 3100				 mov ax, 3100h		     ; TERMINATE AND STAY RESIDENT
+     20
+     21	0109  BA 0464r				 mov dx, offset	EOP	     ;	 SET MEMORY FOR	INTERRUPTION
+     22	010C  C1 EA 04				 shr dx, 4		     ;	 GET PARAGRAPHS
+     23	010F  42				 inc dx			     ;	 +1 PARAGRAPH FOR MORE SAFETY
+     24
+     25	0110  CD 21				 int 21h
+     26
+     27				     ; =============================================
+     28				     ;
+     29				     ;	 Start of custom interruption 09
+     30				     ;
+     31				     ; =============================================
+     32
+     33	0112			     New09	 proc
+     34	0112  50 53 06				 push ax bx es
+     35
+     36	0115  E4 60				 in al,	60h		     ; GET INPUT FROM KEYBOARD PORT
+     37
+     38	0117  3C 3B				 cmp al, 3bh		     ; F1 IS HOTKEY
+     39	0119  75 19				 jne NotHotkey
+     40
+     41	011B  2E: C6 06	0463r FF  +  IsHotkey:	 mov cs:HotKeyFlag, TRUE
+     42	      90
+     43
+     44	0122  E4 61				 in al,	61h		     ;	 \
+     45	0124  0C 80				 or al,	80h		     ;	  |
+     46	0126  E6 61				 out 61h, al		     ;	  | BLINK TO ALLOW KEYBOARD INPUT
+     47	0128  24 7F				 and al, not 80h	     ;	  |
+     48	012A  E6 61				 out 61h, al		     ;	 /
+     49
+     50	012C  B0 20				 mov al, 20h		     ; LEAVE INTERRUPTION
+     51	012E  E6 20				 out 20h, al
+     52
+     53	0130  07 5B 58				 pop es	bx ax
+     54
+     55	0133  CF				 iret
+     56
+     57	0134  07 5B 58		     NotHotkey:	 pop es	bx ax
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 2
+int.asm
+
+
+
+     58
+     59	0137  EA		     db		 0Eah
+     60	0138  0000		     Old090fs	 dw 0
+     61	013A  0000		     Old09Seg	 dw 0			 ; jmp on Old090Seg:Old090fs
+     62
+     63	013C					 endp
+     64
+     65				     ; =============================================
+     66				     ;
+     67				     ;	 Start of custom interruption 08
+     68				     ;
+     69				     ; =============================================
+     70
+     71	013C			     New08	 proc
+     72
+     73	013C  2E: 80 3E	0463r 00		 cmp cs:HotKeyFlag, FALSE
+     74	0142  74 15				 je NoFrame
+     75
+     76	0144  0E 16 06 1E 54 55	57+		 push	 cs ss es ds sp	bp di si dx cx bx ax
+     77	      56 52 51 53 50
+     78	0150  E8 01FE				 call	 SaveRegisters
+     79	0153  83 C4 18				 add	 sp, 24d
+     80
+     81	0156  E8 004B				 call SpawnFrame
+     82
+     83	0159			     NoFrame:
+     84
+     85	0159  EA		     db		 0Eah
+     86	015A  0000		     Old080fs	 dw 0
+     87	015C  0000		     Old08Seg	 dw 0			 ; jmp on Old080Seg:Old080fs
+     88
+     89	015E					 endp
+     90
+     91				     ; --------------------------------------------
+     92				     ;	 Initialization	9th interruption
+     93				     ; --------------------------------------------
+     94
+     95	015E			     Init09	 proc
+     96	015E  B8 3509				 mov ax, 3509h		     ; GETS VECTOR FROM	STD INTERRUPTION
+     97	0161  CD 21				 int 21h
+     98
+     99	0163  89 1E 0138r			 mov Old090fs, bx	     ;	 \
+    100	0167  8C C3				 mov bx, es		     ;	 |   AUTOGENERATING FAR	JUMP
+    101	0169  89 1E 013Ar			 mov Old09Seg, bx	     ;	 /
+    102
+    103	016D  6A 00				 push 0
+    104	016F  07				 pop es
+    105	0170  BB 0024				 mov bx, 9 * 4		     ;	GET 9th	POSITION IN INTERRUIPTION TABLE
+    106
+    107	0173  FA				 cli			     ;	\
+    108	0174  26: C7 07	0112r			 mov es:[bx], offset New09   ;	 |
+    109									     ;	 |
+    110	0179  0E				 push cs		     ;	 |   ADD CUSTOM	INTERRUPTION IN	TABLE
+    111	017A  58				 pop ax			     ;	 |
+    112									     ;	 |
+    113	017B  26: 89 47	02			 mov es:[bx + 2], ax	     ;	 |
+    114	017F  FB				 sti			     ;	/
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 3
+int.asm
+
+
+
+    115
+    116	0180  C3				 ret
+    117	0181					 endp
+    118
+    119				     ; --------------------------------------------
+    120				     ;	 Initialization	of 9th interruption
+    121				     ; --------------------------------------------
+    122
+    123	0181			     Init08	 proc
+    124	0181  B8 3508				 mov ax, 3508h		     ; GETS VECTOR FROM	STD INTERRUPTION
+    125	0184  CD 21				 int 21h
+    126
+    127	0186  89 1E 015Ar			 mov Old080fs, bx	     ;	 \
+    128	018A  8C C3				 mov bx, es		     ;	 |   AUTOGENERATING FAR	JUMP
+    129	018C  89 1E 015Cr			 mov Old08Seg, bx	     ;	 /
+    130
+    131	0190  6A 00				 push 0
+    132	0192  07				 pop es
+    133	0193  BB 0020				 mov bx, 8 * 4		     ;	GET 8th	POSITION IN INTERRUIPTION TABLE
+    134
+    135	0196  FA				 cli			     ;	\
+    136	0197  26: C7 07	013Cr			 mov es:[bx], offset New08   ;	 |
+    137									     ;	 |
+    138	019C  0E				 push cs		     ;	 |   ADD CUSTOM	INTERRUPTION IN	TABLE
+    139	019D  58				 pop ax			     ;	 |
+    140									     ;	 |
+    141	019E  26: 89 47	02			 mov es:[bx + 2], ax	     ;	 |
+    142	01A2  FB				 sti			     ;	/
+    143
+    144	01A3  C3				 ret
+    145	01A4					 endp
+    146
+    147				     include Hframe.asm
+1   148	      =0018		     START_PLACE  = 24d							     ; PLACE IN	MEMORY TO   +
+    149				     PRINT REGISTERS
+1   150	      =0004		     SHIFT	  = 4d							     ; SHIFT BETWEEN	    +
+    151				     REGISTERS IN MEMORY
+1   152	      =07D0		     CENTER_BYTE  = 2000d
+1   153
+1   154				     ;------------------------------------------------
+1   155				     ; Spawns frame
+1   156				     ;
+1   157				     ; Entry:
+1   158				     ; Exit:
+1   159				     ; Destr:
+1   160				     ;------------------------------------------------
+1   161
+1   162	01A4			     SpawnFrame	     proc
+1   163	01A4  06 1E 57				     push es ds	di
+1   164
+1   165	01A7  BF 03E6r				     mov di, offset FrameParams
+1   166
+1   167	01AA  0E				     push cs
+1   168	01AB  0E				     push cs
+1   169	01AC  07				     pop es
+1   170	01AD  1F				     pop ds
+1   171
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 4
+int.asm
+
+
+
+1   172	01AE  E8 0090				     call    GetConsoleParams
+1   173
+1   174	01B1  57				     push    di			     ; SAVING CONSOLE POINTER
+1   175
+1   176	01B2  E8 0131				     call    CenterFrame
+1   177	01B5  E8 014E				     call    DrawFrame
+1   178
+1   179	01B8  5E				     pop     si			     ; SI - NEW	CONSOLE	POINTER
+1   180
+1   181	01B9  03 FB				     add     di, bx		     ; DI += 2 * (LEN /	2) [CENTER OF THE TOP LINE]
+1   182	01BB  D1 EF				     shr     di, 1
+1   183	01BD  D1 E7				     shl     di, 1		     ; DI MUST BE EVEN
+1   184
+1   185	01BF  E8 0004				     call    FillFrameText
+1   186
+1   187	01C2  5F 1F 07				     pop di ds es
+1   188	01C5  C3				     ret
+1   189	01C6							 endp
+1   190
+1   191				     ;------------------------------------------------
+1   192				     ; Fills frame with	text
+1   193				     ;
+1   194				     ; Entry: SI - text	pointer
+1   195				     ;	      DI - center of the top line
+1   196				     ;	      AH - COLOR
+1   197				     ; Exit:
+1   198				     ; Destr:
+1   199				     ;------------------------------------------------
+1   200
+1   201	01C6			     FillFrameText	 proc
+1   202
+1   203	01C6  B0 3A					 mov	 al, ':'
+1   204	01C8  E8 003F					 call	 PrintFrameLine	     ; PRINTING	HEADER
+1   205
+1   206	01CB  BF 07D0					 mov	 di, CENTER_BYTE
+1   207
+1   208	01CE  E8 001E					 call	 CountTextStrings
+1   209
+1   210	01D1  8B CB					 mov	 cx, bx		     ; AMOUNT OF STRINGS TO PRINT
+1   211	01D3  83 E9 01					 sub	 cx, 1d		     ; EXCEPT THE LAST
+1   212
+1   213	01D6  D1 EB					 shr	 bx, 1
+1   214	01D8  69 DB 00A0				 imul	 bx, bx, 160d
+1   215	01DC  2B FB					 sub	 di, bx		     ; CENTER OF THE FIRST STRING'S LINE
+1   216
+1   217
+1   218	01DE  B0 5C		     PrintStrLoop:	 mov	 al, '\'
+1   219	01E0  E8 0027					 call	 PrintFrameLine
+1   220	01E3  81 C7 00A0				 add	 di, 160d
+1   221	01E7  E2 F5					 loop	 PrintStrLoop
+1   222
+1   223	01E9  B0 24					 mov	 al, '$'
+1   224	01EB  E8 001C					 call	 PrintFrameLine	    ; PRINTING LAST STRING
+1   225
+1   226	01EE  C3						     ret
+1   227	01EF							     endp
+1   228
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 5
+int.asm
+
+
+
+1   229				     ;------------------------------------------------
+1   230				     ; Counts amount of	strings	in text
+1   231				     ;
+1   232				     ; Entry: SI - text	pointer
+1   233				     ; Exit:  BX - amount of strings
+1   234				     ; Destr:
+1   235				     ;------------------------------------------------
+1   236
+1   237	01EF			     CountTextStrings	 proc
+1   238	01EF  56					 push	 si
+1   239	01F0  50					 push	 ax
+1   240	01F1  51					 push	 cx
+1   241
+1   242	01F2  33 DB					 xor	 bx, bx		     ; BX = 0
+1   243	01F4  33 C9					 xor	 cx, cx		     ; CX = 0
+1   244	01F6  49					 dec	 cx		     ; CX = FFFF
+1   245
+1   246	01F7  8A 04		     StrCounterLoop:	 mov	 al, [si]
+1   247	01F9  3C 5C					 cmp	 al, '\'
+1   248
+1   249	01FB  75 01					 jne	 NotNewStr	     ; JUMP IF NOT NEW STRING
+1   250	01FD  43					 inc	 bx		     ; AMOUNT OF STRINGS++
+1   251
+1   252	01FE  3C 24		     NotNewStr:		 cmp	 al, '$'
+1   253	0200  74 03					 je	 StrLoopExit	     ; JUMP IF END
+1   254	0202  46					 inc	 si		     ; NEW SYMBOL
+1   255	0203  E2 F2					 loop	 StrCounterLoop
+1   256
+1   257	0205  43		     StrLoopExit:	 inc	 bx			 ; LAST	STRING
+1   258
+1   259	0206  59					 pop	 cx
+1   260	0207  58					 pop	 ax
+1   261	0208  5E					 pop	 si
+1   262	0209  C3						     ret
+1   263	020A							     endp
+1   264
+1   265				     ;------------------------------------------------
+1   266				     ; Prints frame's line
+1   267				     ;
+1   268				     ; Entry: SI - header pointer
+1   269				     ;	      DI - center of the line
+1   270				     ;	      AH - COLOR
+1   271				     ;	      AL - BREAK SYMBOL
+1   272				     ; Exit:
+1   273				     ; Destr: SI
+1   274				     ;------------------------------------------------
+1   275
+1   276	020A			     PrintFrameLine	 proc
+1   277	020A  57					 push	 di
+1   278	020B  51					 push	 cx
+1   279
+1   280	020C  E8 0016					 call	 MyStrlen
+1   281
+1   282	020F  51					 push	 cx		     ; SAVING STRING LENGTH
+1   283
+1   284	0210  D1 E9					 shr	 cx, 1
+1   285	0212  D1 E1					 shl	 cx, 1
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 6
+int.asm
+
+
+
+1   286	0214  2B F9					 sub	 di, cx		     ; DI -= 2 * (HEADER_LEN / 2)
+1   287
+1   288	0216  59					 pop	 cx		     ; CX = STRING LEN
+1   289
+1   290	0217  E8 0003					 call	 PrintText
+1   291
+1   292	021A  59					 pop	 cx
+1   293	021B  5F					 pop	 di
+1   294	021C  C3						     ret
+1   295	021D							     endp
+1   296
+1   297				     ;------------------------------------------------
+1   298				     ; Prints text in videomemory
+1   299				     ;
+1   300				     ; Entry: SI - text	pointer
+1   301				     ;	      CX - text	len
+1   302				     ;	      AH - COLOR
+1   303				     ;	      AL - Break symbol
+1   304				     ; Exit:
+1   305				     ; Destr: DI, SI, CX
+1   306				     ;------------------------------------------------
+1   307
+1   308	021D			     PrintText	     proc
+1   309
+1   310	021D  AC		     Text:	     lodsb
+1   311	021E  AB				     stosw
+1   312	021F  E2 FC				     loop    Text
+1   313
+1   314	0221  83 C6 01				     add     si, 1d	 ; SKIPPING BREAK SYMBOL
+1   315
+1   316	0224  C3						 ret
+1   317	0225							 endp
+1   318
+1   319				     ;------------------------------------------------
+1   320				     ; Gets string length
+1   321				     ;
+1   322				     ; Entry: SI - string adress
+1   323				     ;	      AL - end symbol
+1   324				     ; Exit:  CX - string len
+1   325				     ; Destr: AL
+1   326				     ;------------------------------------------------
+1   327
+1   328	0225			     MyStrlen	 proc
+1   329	0225  56				 push	 si
+1   330	0226  53				 push	 bx
+1   331	0227  57				 push	 di
+1   332
+1   333	0228  8B FE				 mov	 di, si
+1   334
+1   335	022A  8C DB				 mov	 bx, ds
+1   336	022C  8E C3				 mov	 es, bx		     ; ES -> TEXT MEM
+1   337
+1   338	022E  33 C9				 xor	 cx, cx
+1   339	0230  49				 dec	 cx		     ; CX = FFFF
+1   340
+1   341	0231  F2> AE				 repne	 scasb		     ; CX = -1 - LENGTH
+1   342
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 7
+int.asm
+
+
+
+1   343	0233  F7 D1				 not	 cx		     ; CX = 1 +	LENGTH
+1   344	0235  83 E9 01				 sub	 cx, 1d		     ; CX = LENGTH
+1   345
+1   346	0238  BB B800				 mov	 bx, 0b800h
+1   347	023B  8E C3					 mov	 es, bx		     ; ES -> VIDEOMEM
+1   348
+1   349	023D  5F				 pop	 di
+1   350	023E  5B				 pop	 bx
+1   351	023F  5E				 pop	 si
+1   352	0240  C3				 ret
+1   353	0241					 endp
+1   354
+1   355
+1   356				     ;------------------------------------------------
+1   357				     ; Getting frame parameters	from console
+1   358				     ;
+1   359				     ; Entry: DI - command line
+1   360				     ; Exit:  BX - LENGTH
+1   361				     ;	      DX - WIDTH
+1   362				     ;	      AH - COLOR
+1   363				     ;	      DI - TEXT	POINTER
+1   364				     ; Destr:
+1   365				     ;------------------------------------------------
+1   366
+1   367	0241			     GetConsoleParams	 proc
+1   368
+1   369	0241  E8 0071					 call	 GetDec		    ; LENGTH
+1   370	0244  8B D8					 mov	 bx, ax
+1   371
+1   372	0246  E8 008E					 call	 SkipSpaces
+1   373
+1   374	0249  E8 0069					 call	 GetDec		    ; WIDTH
+1   375	024C  8B D0					 mov	 dx, ax
+1   376
+1   377	024E  E8 0086					 call	 SkipSpaces
+1   378
+1   379	0251  E8 000C					 call	 GetHex		    ; COLOR
+1   380	0254  8A E0					 mov	 ah, al
+1   381
+1   382	0256  E8 007E					 call	 SkipSpaces
+1   383
+1   384	0259  E8 0038					 call	 GetStyle	    ; STYLE
+1   385
+1   386	025C  E8 0078					 call	 SkipSpaces
+1   387
+1   388	025F  C3						     ret
+1   389	0260							     endp
+1   390
+1   391				     ;------------------------------------------------
+1   392				     ; Getting hexadecimal number (FORMAT: ...h)
+1   393				     ;
+1   394				     ; Entry: DI - command line
+1   395				     ; Exit:  AX - number
+1   396				     ; Destr:
+1   397				     ;------------------------------------------------
+1   398
+1   399	0260			     GetHex		 proc
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 8
+int.asm
+
+
+
+1   400	0260  53					 push	 bx			 ; SAVING BX
+1   401
+1   402	0261  33 DB					 xor	 bx, bx			 ; BX =	0
+1   403	0263  32 E4					 xor	 ah, ah
+1   404
+1   405	0265  8A 05					 mov	 al, [di]		 ; FIRST SYMBOL
+1   406
+1   407	0267  3D 0030		     HexDigit:		 cmp	 ax, '0'
+1   408	026A  7C 0A					 jl	 HexAlpha
+1   409	026C  3D 0039					 cmp	 ax, '9'
+1   410	026F  7F 05					 jg	 HexAlpha
+1   411
+1   412	0271  2C 30					 sub	 al, '0'		 ; AL =	[0-9]
+1   413
+1   414	0273  EB 0F 90					 jmp	 HexLoop
+1   415
+1   416	0276  3D 0061		     HexAlpha:		 cmp	 ax, 'a'
+1   417	0279  7C 15					 jl	 ExitHexLoop
+1   418	027B  3D 0066					 cmp	 ax, 'f'
+1   419	027E  7F 10					 jg	 ExitHexLoop
+1   420
+1   421	0280  2C 61					 sub	 al, 'a'
+1   422	0282  04 0A					 add	 al, 10d		 ; AL =	[A-F]
+1   423
+1   424	0284  6B DB 10		     HexLoop:		 imul	 bx, bx, 16d		; BX *=	16
+1   425
+1   426	0287  32 E4					 xor	 ah, ah			 ; AX =	00 AL
+1   427	0289  03 D8					 add	 bx, ax			 ; BX += AL
+1   428
+1   429	028B  47					 inc	 di			 ; DI++
+1   430	028C  8A 05					 mov	 al, [di]
+1   431
+1   432	028E  EB D7					 jmp	 HexDigit
+1   433	0290			     ExitHexLoop:
+1   434
+1   435	0290  8B C3					 mov	 ax, bx
+1   436
+1   437	0292  5B					 pop	 bx
+1   438	0293  C3						     ret
+1   439	0294							     endp
+1   440
+1   441				     ;------------------------------------------------
+1   442				     ; Getting style from console
+1   443				     ;
+1   444				     ; Entry: DI - command line
+1   445				     ; Exit:  SI - char	string
+1   446				     ;	      DI - string after	style
+1   447				     ; Destr:
+1   448				     ;------------------------------------------------
+1   449
+1   450	0294			     GetStyle	 proc
+1   451	0294  50				 push	 ax
+1   452
+1   453	0295  8A 05				 mov	 al, [di]
+1   454
+1   455	0297  3C 2A				 cmp	 al, '*'
+1   456	0299  75 0A				 jne	 DefaultStyle	     ; JUMP IF STYLE IS	NOT CUSTOM
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 9
+int.asm
+
+
+
+1   457
+1   458	029B  8B F7				 mov	 si, di		     ; CREATING	CUSTOM STYLE STRING IN SI REGISTER
+1   459	029D  83 C6 01				 add	 si, 1d		     ; SKIPPING	*
+1   460
+1   461	02A0  83 C7 0A				 add	 di, 10d	     ; SKIPPING	CUSTOM STYLE STRING
+1   462
+1   463	02A3  58				 pop	 ax
+1   464	02A4  C3				 ret
+1   465
+1   466	02A5			     DefaultStyle:
+1   467
+1   468	02A5  E8 000D				 call	 GetDec		     ; GETTING NUMBER OF DEFAULT STYLE
+1   469
+1   470	02A8  2D 0001				 sub	 ax, 1d		     ; DEFAULT STRING STARTS WITH ZERO SHIFT
+1   471
+1   472	02AB  6B C0 09				 imul	 ax, ax, 9d	     ; GETTING MEMORY SHIFT
+1   473
+1   474	02AE  BE 03C2r				 mov	 si, offset Style
+1   475	02B1  03 F0				 add	 si, ax		     ; USING MEMORY SHIFT
+1   476
+1   477	02B3  58				 pop ax
+1   478	02B4  C3					     ret
+1   479	02B5						     endp
+1   480
+1   481				     ;------------------------------------------------
+1   482				     ; Getting decimal number from command line
+1   483				     ;
+1   484				     ; Entry: DI - command line
+1   485				     ; Exit:  AX - number
+1   486				     ; Destr:
+1   487				     ;------------------------------------------------
+1   488
+1   489	02B5			     GetDec	     proc
+1   490	02B5  53				     push    bx			     ; SAVING BX
+1   491
+1   492	02B6  33 DB				     xor     bx, bx		     ; BX = 0
+1   493	02B8  32 E4				     xor     ah, ah
+1   494
+1   495	02BA  EB 0B 90				     jmp     DecLoopCheck
+1   496
+1   497	02BD  6B DB 0A		     DecLoop:	     imul    bx, bx, 10d	     ; BX *= 10
+1   498
+1   499	02C0  47				     inc     di			     ; DI++
+1   500	02C1  2C 30				     sub     al, '0'		     ; AL = DIGIT
+1   501
+1   502	02C3  32 E4				     xor     ah, ah		     ; AX = 00 AL
+1   503	02C5  03 D8				     add     bx, ax		     ; BX += AL
+1   504
+1   505	02C7  8A 05		     DecLoopCheck:   mov     al, [di]
+1   506	02C9  3D 0030				     cmp     ax, '0'
+1   507	02CC  7C 05				     jl	     DecLoopExit
+1   508	02CE  3D 0039				     cmp     ax, '9'
+1   509	02D1  7E EA				     jle     DecLoop
+1   510	02D3			     DecLoopExit:
+1   511
+1   512	02D3  8B C3				     mov     ax, bx		     ; AX = BX
+1   513
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 10
+int.asm
+
+
+
+1   514	02D5  5B				     pop     bx			     ; RETURNING BX
+1   515
+1   516	02D6  C3						 ret
+1   517	02D7							 endp
+1   518
+1   519				     ;------------------------------------------------
+1   520				     ; Skipping	spaces from command line
+1   521				     ;
+1   522				     ; Entry: DI - command line
+1   523				     ; Exit:
+1   524				     ; Destr:
+1   525				     ;------------------------------------------------
+1   526
+1   527	02D7			     SkipSpaces	 proc
+1   528
+1   529	02D7  50				 push	 ax			 ; SAVING REGISTERS
+1   530	02D8  51				 push	 cx
+1   531
+1   532	02D9  33 C9				 xor	 cx, cx		     ; CX = 0
+1   533	02DB  49				 dec	 cx		     ; CX = FFFF
+1   534
+1   535	02DC  B0 20				 mov	 al, ' '
+1   536
+1   537	02DE  F3> AE				 repe	 scasb		     ; SKIP WHILE SPACE
+1   538
+1   539	02E0  8A 05				 mov	 al, [di]
+1   540
+1   541	02E2  4F				 dec	 di		     ; FIRST SYMBOL AFTER SPACE
+1   542
+1   543	02E3  59				 pop	 cx		     ; RETURNING REGISTERS
+1   544	02E4  58				 pop	 ax
+1   545
+1   546	02E5  C3					     ret
+1   547	02E6						     endp
+1   548
+1   549				     ;------------------------------------------------
+1   550				     ; Frame centering
+1   551				     ;
+1   552				     ; Entry: dx - width
+1   553				     ;	      bx - length
+1   554				     ; Exit:  di - frame's left	upper corner position
+1   555				     ; Destr:
+1   556				     ;------------------------------------------------
+1   557
+1   558	02E6			     CenterFrame proc
+1   559
+1   560	02E6  52				 push	 dx			 ; SAVING WIDTH
+1   561	02E7  53				 push	 bx			 ; SAVING LENGTH
+1   562	02E8  56				 push	 si
+1   563	02E9  50				 push	 ax
+1   564
+1   565	02EA  D1 EA				 shr	 dx, 1			 ; DX =	WIDTH /	2
+1   566	02EC  D1 EB				 shr	 bx, 1			 ; BX =	LENGTH / 2
+1   567
+1   568	02EE  BF 0028				 mov	 di, 40d
+1   569	02F1  BE 000C				 mov	 si, 12d
+1   570
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 11
+int.asm
+
+
+
+1   571	02F4  2B F2				 sub	 si, dx			 ; SI =	MIDDLE LINE - WIDTH / 2
+1   572	02F6  2B FB				 sub	 di, bx			 ; DI =	MIDDLE COLUMN -	LENGTH / 2
+1   573
+1   574	02F8  6B C6 50				 imul	 ax, si, LINE_LEN
+1   575	02FB  03 C7				 add	 ax, di
+1   576
+1   577	02FD  D1 E0				 shl	 ax, 1			 ; AX =	(MIDDLE	LINE - WIDTH / 2, MIDDLE COLUMN	-   +
+    578				     LENGTH / 2)
+1   579
+1   580	02FF  8B F8				 mov	 di, ax
+1   581
+1   582	0301  58				 pop	 ax
+1   583	0302  5E				 pop	 si
+1   584	0303  5B				 pop	 bx			 ; RETURNING WIDTH
+1   585	0304  5A				 pop	 dx			 ; RETURNING LENGTH
+1   586
+1   587	0305  C3					     ret
+1   588	0306						     endp
+1   589
+1   590				     ;------------------------------------------------
+1   591				     ; Draw frame
+1   592				     ;
+1   593				     ; Entry: di - first byte position
+1   594				     ;	      si - char	string adress
+1   595				     ;	      dx - width
+1   596				     ;	      bx - length
+1   597				     ;	      ah - color
+1   598				     ; Exit: None
+1   599				     ; Destr: CX, ES
+1   600				     ;------------------------------------------------
+1   601
+1   602	0306			     DrawFrame	 proc
+1   603	0306  50				 push	 ax
+1   604	0307  53				 push	 bx
+1   605	0308  52				 push	 dx
+1   606	0309  56				 push	 si
+1   607	030A  57				 push	 di
+1   608
+1   609	030B  53				 push	 bx
+1   610	030C  BB B800				 mov	 bx, 0b800h
+1   611	030F  8E C3					 mov	 es, bx			 ; ES -> VIDEOMEM
+1   612	0311  5B				 pop	 bx
+1   613
+1   614	0312  83 EA 02				 sub	 dx, 2d			 ; AMOUNT OF FRAME'S BODY LINES
+1   615	0315  83 EB 02				 sub	 bx, 2d			 ; AMOUNT OF LINE'S BODY SYMBOLS
+1   616
+1   617	0318  8B CB				 mov	 cx, bx			 ; CX =	BX
+1   618	031A  E8 002C				 call	 DrawLine		 ; PRINT LINE WITH (BX + 2) LENGTH
+1   619
+1   620	031D  81 C7 009C			 add	 di, 156d
+1   621	0321  2B FB				 sub	 di, bx
+1   622	0323  2B FB				 sub	 di, bx			 ; JUMP	TO THE NEXT LINE
+1   623
+1   624	0325  8B CA				 mov	 cx, dx			 ; PRINTING FRAME'S BODY WITH (DX - 2) WIDTH
+1   625
+1   626	0327  51		     body:	 push	 cx			 ; SAVING BODY WIDTH COUNTER
+1   627
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 12
+int.asm
+
+
+
+1   628	0328  8B CB				 mov	 cx, bx
+1   629	032A  E8 001C				 call	 DrawLine		 ; PRINT LINE WITH (BX + 2) LENGTH
+1   630
+1   631	032D  59				 pop	 cx			 ; GETTING BODY	WIDTH COUNTER
+1   632	032E  83 EE 03				 sub	 si, 3d			 ; NEXT	LINE WILL HAVE SAME SYMBOLS, AS	PREVIOUS
+1   633
+1   634	0331  81 C7 009C			 add	 di, 156d
+1   635	0335  2B FB				 sub	 di, bx
+1   636	0337  2B FB				 sub	 di, bx			 ; JUMP	TO THE NEXT LINE
+1   637	0339  E2 EC				 loop	 body
+1   638
+1   639	033B  83 C6 03				 add	 si, 3d			 ; GETTING NEW SYMBOLS FOR NEXT	LINE
+1   640
+1   641	033E  8B CB				 mov	 cx, bx
+1   642	0340  E8 0006				 call	 DrawLine		 ; PRINT LINE WITH (BX + 2) LENGTH
+1   643
+1   644	0343  5F				 pop	 di
+1   645	0344  5E				 pop	 si
+1   646	0345  5A				 pop	 dx
+1   647	0346  5B				 pop	 bx
+1   648	0347  58				 pop	 ax
+1   649	0348  C3					     ret
+1   650	0349						     endp
+1   651
+1   652
+1   653				     ;------------------------------------------------
+1   654				     ; Draw line
+1   655				     ;
+1   656				     ; Entry: di - first byte position
+1   657				     ;	      si - char	string adress
+1   658				     ;	      cx - line	length - 2
+1   659				     ;	      ah - color
+1   660				     ; Exit: None
+1   661				     ; Destr: AX, CX, DI
+1   662				     ;------------------------------------------------
+1   663
+1   664	0349			     DrawLine	 proc
+1   665	0349  AC				 lodsb			 ; GET FIRST STRING SYMBOL
+1   666	034A  AB				 stosw			 ; PLACE LINE'S	START
+1   667
+1   668	034B  AC				 lodsb			 ; GET SECOND STRING SYMBOL
+1   669	034C  F3> AB				 rep stosw		 ; PLACE LINE'S	BODY
+1   670
+1   671	034E  AC				 lodsb			 ; GET LAST STRING SYMBOL
+1   672	034F  AB				 stosw			 ; PLACE LINE'S	ENDING
+1   673
+1   674	0350  C3					     ret
+1   675	0351						     endp
+1   676
+1   677				     ; --------------------------------------------------
+1   678				     ; Saves registers in memory
+1   679				     ;
+1   680				     ; Entry:
+1   681				     ; Exit:
+1   682				     ; Destr:
+1   683				     ; --------------------------------------------------
+1   684
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 13
+int.asm
+
+
+
+1   685	0351			     SaveRegisters	     proc
+1   686	0351  55					 push bp
+1   687	0352  8B EC					 mov bp, sp
+1   688
+1   689	0354  57 51 53							     push di cx	bx
+1   690
+1   691	0357  B9 000D					 mov cx, 13d			 ; REGISTERS AMOUNT
+1   692	035A  8B DD					 mov bx, bp			 ; FIRST PARAMETER INDEX
+1   693	035C  83 C3 04					 add bx, 4d
+1   694
+1   695	035F  BF 03E6r							     mov di, offset FrameParams
+1   696	0362  83 C7 18							     add di, START_PLACE
+1   697
+1   698	0365  36: 8B 07		     RegisterLoop:	 mov ax, ss:[bx]
+1   699	0368  E8 000A					 call OutputRegister
+1   700	036B  83 C3 02					 add bx, 2d
+1   701	036E  E2 F5					 loop RegisterLoop
+1   702
+1   703	0370  5B 59 5F							     pop bx cx di
+1   704
+1   705	0373  5D					 pop bp
+1   706	0374  C3							     ret
+1   707	0375								     endp
+1   708
+1   709				     ; --------------------------------------------------
+1   710				     ; Prints data from	register in memory
+1   711				     ;
+1   712				     ; Entry: DI - place, AX - register
+1   713				     ; Exit:
+1   714				     ; Destr: DI
+1   715				     ; --------------------------------------------------
+1   716
+1   717	0375			     OutputRegister	     proc
+1   718	0375  50 50 50 50						     push ax ax	ax ax
+1   719
+1   720	0379  C1 E8 0C							     shr ax, 12
+1   721	037C  25 000F							     and ax, 000Fh
+1   722	037F  E8 0020							     call PrintDigit
+1   723
+1   724	0382  58							     pop ax
+1   725	0383  C1 E8 08							     shr ax, 8
+1   726	0386  25 000F							     and ax, 000Fh
+1   727	0389  E8 0016							     call PrintDigit
+1   728
+1   729	038C  58							     pop ax
+1   730	038D  C1 E8 04							     shr ax, 4
+1   731	0390  25 000F							     and ax, 000Fh
+1   732	0393  E8 000C							     call PrintDigit
+1   733
+1   734	0396  58							     pop ax
+1   735	0397  25 000F							     and ax, 000Fh
+1   736	039A  E8 0005							     call PrintDigit
+1   737
+1   738	039D  83 C7 04							     add di, SHIFT					    +
+    739				     ; JUMPING ON THE NEXT REGISTER
+1   740
+1   741	03A0  58							     pop ax
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 14
+int.asm
+
+
+
+1   742
+1   743	03A1  C3							     ret
+1   744	03A2								     endp
+1   745
+1   746				     ; --------------------------------------------------
+1   747				     ; Prints digit in memory from HEX number
+1   748				     ;
+1   749				     ; Entry: DI - memory adress, AX - number
+1   750				     ; Exit:
+1   751				     ; Destr: DI
+1   752				     ; --------------------------------------------------
+1   753
+1   754	03A2			     PrintDigit			     proc
+1   755	03A2  56 06							     push si es
+1   756
+1   757	03A4  0E							     push cs
+1   758	03A5  07							     pop es
+1   759
+1   760	03A6  BE 03B2r							     mov si, offset RegOutput
+1   761	03A9  03 F0							     add si, ax
+1   762
+1   763	03AB  26: 8A 04							     mov al, es:[si]
+1   764
+1   765	03AE  AA							     stosb
+1   766
+1   767	03AF  07 5E							     pop es si
+1   768	03B1  C3							     ret
+1   769	03B2								     endp
+1   770
+1   771	03B2  30 31 32 33 34 35	36+  RegOutput	 db '0123456789ABCDEF'
+    772	      37 38 39 41 42 43	44+
+    773	      45 46
+1   774
+1   775	03C2  C9 CD BB BA 00 BA	C8+  Style  db 201d, 205d, 187d, 186d, 0000d, 186d, 200d, 205d,	188d, \
+    776	      CD BC 2F 2D 5C 49	20+	       '/',   '-',  '\',  'I',	 ' ',  'I',  '\',  '-',	 '/', \
+    777	      49 5C 2D 2F 4C 4F	4C+	       'L',   'O',  'L',  'O',	 ' ',  'O',  'L',  'O',	 'L', \
+    778	      4F 20 4F 4C 4F 4C	03+		3d,    3d,   3d,   3d, 0000d,	3d,   3d,   3d,	  3d
+    779	      03 03 03 00 03 03	03+
+    780	      03
+1   781
+1   782	03E6  31 33 20 31 37 20	34+  FrameParams db '13	17 4e 1	registers:', \
+    783	      65 20 31 20 72 65	67+				'ax	\', \
+    784	      69 73 74 65 72 73	3A+				'bx	\', \
+    785	      61 78 20 20 20 20	20+				'cx	\', \
+    786	      5C 62 78 20 20 20	20+				'dx	\', \
+    787	      20 5C 63 78 20 20	20+				'si	\', \
+    788	      20 20 5C 64 78 20	20+				'di	\', \
+    789	      20 20 20 5C 73 69	20+				'bp	\', \
+    790	      20 20 20 20 5C 64	69+				'sp	\', \
+    791	      20 20 20 20 20 5C	62+				'ds	\', \
+    792	      70 20 20 20 20 20	5C+				'es	\', \
+    793	      73 70 20 20 20 20	20+				'ss	\', \
+    794	      5C 64 73 20 20 20	20+				'cs	\', \
+    795	      20 5C 65 73 20 20	20+				'ip	$' \
+    796	      20 20 5C 73 73 20	20+
+    797	      20 20 20 5C 63 73	20+
+    798	      20 20 20 20 5C 69	70+
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 15
+int.asm
+
+
+
+    799	      20 20 20 20 20 24
+1   800
+1   801
+    802
+    803	0463  00		     HotKeyFlag	 db FALSE
+    804
+    805	0464			     EOP:
+    806
+    807				     end	 Start
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 16
+Symbol Table
+
+
+
+
+Symbol Name			  Type	 Value
+
+??DATE				  Text	 "02/26/24"
+??FILENAME			  Text	 "int	  "
+??TIME				  Text	 "25:08:16"
+??VERSION			  Number 040A
+@32BIT				  Text	 0
+@CODE				  Text	 DGROUP
+@CODESIZE			  Text	 0
+@CPU				  Text	 0707H
+@CURSEG				  Text	 _TEXT
+@DATA				  Text	 DGROUP
+@DATASIZE			  Text	 0
+@FILENAME			  Text	 INT
+@INTERFACE			  Text	 000H
+@MODEL				  Text	 1
+@STACK				  Text	 DGROUP
+@WORDSIZE			  Text	 2
+BODY				  Near	 DGROUP:0327
+CENTERFRAME			  Near	 DGROUP:02E6
+CENTER_BYTE			  Number 07D0
+COUNTTEXTSTRINGS		  Near	 DGROUP:01EF
+DECLOOP				  Near	 DGROUP:02BD
+DECLOOPCHECK			  Near	 DGROUP:02C7
+DECLOOPEXIT			  Near	 DGROUP:02D3
+DEFAULTSTYLE			  Near	 DGROUP:02A5
+DRAWFRAME			  Near	 DGROUP:0306
+DRAWLINE			  Near	 DGROUP:0349
+EOP				  Near	 DGROUP:0464
+EXITHEXLOOP			  Near	 DGROUP:0290
+FALSE				  Number 0000
+FILLFRAMETEXT			  Near	 DGROUP:01C6
+FRAMEPARAMS			  Byte	 DGROUP:03E6
+FRAME_COLOR			  Number 004E
+FRAME_LEN			  Number 0028
+FRAME_WIDTH			  Number 0014
+GETCONSOLEPARAMS		  Near	 DGROUP:0241
+GETDEC				  Near	 DGROUP:02B5
+GETHEX				  Near	 DGROUP:0260
+GETSTYLE			  Near	 DGROUP:0294
+HEXALPHA			  Near	 DGROUP:0276
+HEXDIGIT			  Near	 DGROUP:0267
+HEXLOOP				  Near	 DGROUP:0284
+HOTKEYFLAG			  Byte	 DGROUP:0463
+INIT08				  Near	 DGROUP:0181
+INIT09				  Near	 DGROUP:015E
+ISHOTKEY			  Near	 DGROUP:011B
+LINE_LEN			  Number 0050
+MYSTRLEN			  Near	 DGROUP:0225
+NEW08				  Near	 DGROUP:013C
+NEW09				  Near	 DGROUP:0112
+NOFRAME				  Near	 DGROUP:0159
+NOTHOTKEY			  Near	 DGROUP:0134
+NOTNEWSTR			  Near	 DGROUP:01FE
+OLD080FS			  Word	 DGROUP:015A
+OLD08SEG			  Word	 DGROUP:015C
+Turbo Assembler	 Version 4.1	    02/26/24 25:08:16	    Page 17
+Symbol Table
+
+
+
+OLD090FS			  Word	 DGROUP:0138
+OLD09SEG			  Word	 DGROUP:013A
+OUTPUTREGISTER			  Near	 DGROUP:0375
+PRINTDIGIT			  Near	 DGROUP:03A2
+PRINTFRAMELINE			  Near	 DGROUP:020A
+PRINTSTRLOOP			  Near	 DGROUP:01DE
+PRINTTEXT			  Near	 DGROUP:021D
+REGISTERLOOP			  Near	 DGROUP:0365
+REGOUTPUT			  Byte	 DGROUP:03B2
+SAVEREGISTERS			  Near	 DGROUP:0351
+SHIFT				  Number 0004
+SKIPSPACES			  Near	 DGROUP:02D7
+SPAWNFRAME			  Near	 DGROUP:01A4
+START				  Near	 DGROUP:0100
+START_PLACE			  Number 0018
+STRCOUNTERLOOP			  Near	 DGROUP:01F7
+STRLOOPEXIT			  Near	 DGROUP:0205
+STYLE				  Byte	 DGROUP:03C2
+TEXT				  Near	 DGROUP:021D
+TRUE				  Number FFFF
+VMEM				  Number B800
+
+Groups & Segments		  Bit Size Align  Combine Class
+
+DGROUP				  Group
+  _DATA				  16  0000 Word	  Public  DATA
+  _TEXT				  16  0464 Word	  Public  CODE
+

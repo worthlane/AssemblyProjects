@@ -1,24 +1,3 @@
-.model tiny
-.code
-.286
-
-MAX_LEN = 100d
-
-org 82h
-
-argv db ?
-
-org 100h
-
-start:      mov di, offset Line1
-            mov si, offset Line2
-            mov dx, 10d
-            call MyMovmem
-
-            mov ax, 4c00h			        ; EXIT
-		    int 21h
-
-
 ;------------------------------------------------
 ; Gets string length
 ;
@@ -29,6 +8,8 @@ start:      mov di, offset Line1
 
 MyStrlen    proc
             push di
+
+
             push cx
 
             mov al, '$'             ; COUNT TILL MEET
@@ -211,9 +192,3 @@ SrcFirst:   mov cx, dx      ; AMOUNT OF BYTES
             pop dx
             ret
             endp
-
-Line1 db 'AAAA'
-Line2 db 'BBBBBBBBBBBBBBBBBB'
-
-end start
-
